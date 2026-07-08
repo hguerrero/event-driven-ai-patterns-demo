@@ -1,0 +1,15 @@
+{
+  "short_name": "EDA Patterns",
+  "name": "Event-Driven AI Patterns Demo",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "64x64"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000"
+}

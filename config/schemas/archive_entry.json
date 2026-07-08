@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Zion Archive Log Entry",
+  "description": "Immutable audit record appended to zion.archive.log by every agent action in the system. This durable Kafka commit log is the source of truth / memory for the whole demo ('The Zion Archive').",
+  "type": "object",
+  "properties": {
+    "entry_id": {
+      "type": "string",
+      "description": "Unique archive entry identifier",
+      "pattern": "^ZA-[0-9]+-[0-9]+$"
+    },
+    "agent": {
+      "type": "string",
+      "description": "Publishing service name",
+      "enum": [
+        "anomaly-detector-agent", "sentinel-agent", "dispatch-agent", "context-updater"
+      ]
+    },
+    "action": {
+      "type": "string",
+      "description": "Action the agent performed",
+      "enum": ["evaluated", "flagged", "investigated", "dispatched", "context_updated"]
+    },
+    "ref_id": {
+      "type": "string",
+      "description": "ID of the event this archive entry relates to (e.g. reading_id, event_id, or change_id)"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One human-readable sentence describing the action, LLM-generated where applicable"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 event timestamp",
+      "format": "date-time"
+    }
+  },
+  "required": ["entry_id", "agent", "action", "ref_id", "summary", "timestamp"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "entry_id": "ZA-1707581031000-77",
+      "agent": "anomaly-detector-agent",
+      "action": "flagged",
+      "ref_id": "SR-1707580995000-187",
+      "summary": "Flagged a high-severity stability collapse in Subway-Loop-9 and dispatched an orchestration event.",
+      "timestamp": "2026-07-08T14:25:31.700Z"
+    },
+    {
+      "entry_id": "ZA-1707581045000-19",
+      "agent": "context-updater",
+      "action": "context_updated",
+      "ref_id": "PC-1707581020000-91",
+      "summary": "Embedded Trinity's clearance-level update into the oracle-knowledge vector store.",
+      "timestamp": "2026-07-08T14:26:01.200Z"
+    }
+  ]
+}

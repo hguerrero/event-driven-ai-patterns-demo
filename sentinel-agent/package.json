@@ -1,0 +1,20 @@
+{
+  "name": "sentinel-agent",
+  "version": "1.0.0",
+  "description": "Agent Smith Protocol responder — independently consumes agent.orchestration.events and produces an investigation report using Volcano SDK LLM reasoning",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "volcano-sdk": "^1.1.0",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "@types/node": "^22.15.0"
+  }
+}

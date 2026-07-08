@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sentinel Reading Event",
+  "description": "Sensor / system-health reading from a sector of the simulation, produced onto sentinel.readings. Source stream for the Agent Smith Protocol anomaly fan-out pattern.",
+  "type": "object",
+  "properties": {
+    "reading_id": {
+      "type": "string",
+      "description": "Unique reading identifier",
+      "pattern": "^SR-[0-9]+-[0-9]+$"
+    },
+    "sector": {
+      "type": "string",
+      "description": "Sector or zone this reading was captured in",
+      "enum": [
+        "Sector-7", "Downtown-Grid", "Subway-Loop-9",
+        "Power-Nexus", "Residential-Block-12", "Construct-Node-3"
+      ]
+    },
+    "stability_index": {
+      "type": "number",
+      "description": "Stability index from 0 (critical) to 100 (fully stable)",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "status": {
+      "type": "string",
+      "description": "Current sector status",
+      "enum": ["STABLE", "FLUCTUATING", "GLITCH"]
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 event timestamp",
+      "format": "date-time"
+    }
+  },
+  "required": ["reading_id", "sector", "stability_index", "status", "timestamp"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "reading_id": "SR-1707580981000-42",
+      "sector": "Sector-7",
+      "stability_index": 87.5,
+      "status": "STABLE",
+      "timestamp": "2026-07-08T14:23:01.000Z"
+    },
+    {
+      "reading_id": "SR-1707580995000-187",
+      "sector": "Subway-Loop-9",
+      "stability_index": 14.2,
+      "status": "GLITCH",
+      "timestamp": "2026-07-08T14:25:30.000Z"
+    }
+  ]
+}

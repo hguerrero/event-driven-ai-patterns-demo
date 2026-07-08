@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  background-color: #000000;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: 'Fira Code', monospace;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #008f00;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff00;
+}
+
+@layer components {
+  .terminal-window {
+    @apply border border-matrix-darkgreen bg-matrix-black/70 rounded overflow-hidden;
+  }
+
+  .terminal-header {
+    @apply flex items-center px-3 py-2 border-b border-matrix-darkgreen bg-matrix-darkgreen/10;
+  }
+
+  .terminal-content {
+    @apply p-3;
+  }
+
+  .matrix-button {
+    @apply px-3 py-2 border border-matrix-green text-matrix-green rounded hover:bg-matrix-green hover:text-matrix-black transition-all duration-150 uppercase tracking-wide;
+  }
+
+  .matrix-input {
+    @apply bg-matrix-black border border-matrix-darkgreen text-matrix-green rounded px-3 py-2 focus:outline-none focus:border-matrix-green placeholder:text-matrix-darkgreen;
+  }
+
+  .status-indicator {
+    @apply w-2.5 h-2.5 rounded-full inline-block;
+  }
+
+  .status-active {
+    @apply bg-matrix-green shadow-[0_0_6px_2px_rgba(0,255,0,0.6)];
+  }
+
+  .status-inactive {
+    @apply bg-gray-600;
+  }
+
+  .status-error {
+    @apply bg-matrix-red shadow-[0_0_6px_2px_rgba(255,0,64,0.6)];
+  }
+}

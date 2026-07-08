@@ -1,0 +1,19 @@
+{
+  "name": "data-generator",
+  "version": "1.0.0",
+  "description": "Event generator for sentinel.readings (sector stability telemetry) and oracle.profile.changes (simulated CDC stream)",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "@types/node": "^22.15.0"
+  }
+}

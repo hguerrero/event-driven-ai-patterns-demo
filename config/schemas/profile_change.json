@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Oracle Profile Change Event",
+  "description": "Simulated CDC (change-data-capture) event published onto oracle.profile.changes. Represents a mutation to a subject's profile record. Immediately embedded into the RAG vector store by context-updater so the LLM chat endpoint ('The Oracle') always answers with fresh context.",
+  "type": "object",
+  "properties": {
+    "change_id": {
+      "type": "string",
+      "description": "Unique change identifier",
+      "pattern": "^PC-[0-9]+-[0-9]+$"
+    },
+    "op": {
+      "type": "string",
+      "description": "Change-data-capture operation type",
+      "enum": ["INSERT", "UPDATE", "DELETE"]
+    },
+    "subject_name": {
+      "type": "string",
+      "description": "Name of the subject whose profile changed"
+    },
+    "subject_role": {
+      "type": "string",
+      "description": "Role of the subject within the simulation",
+      "enum": ["Operator", "Redpill", "Bluepill", "Unknown"]
+    },
+    "updated_field": {
+      "type": "string",
+      "description": "Which profile field was changed",
+      "enum": ["status", "location", "clearance_level", "last_seen"]
+    },
+    "updated_value": {
+      "type": "string",
+      "description": "New value for the updated field, in free text"
+    },
+    "note": {
+      "type": "string",
+      "description": "One self-contained sentence describing the change, suitable to embed directly into a vector store as a RAG chunk"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 event timestamp",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "change_id", "op", "subject_name", "subject_role",
+    "updated_field", "updated_value", "note", "timestamp"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "change_id": "PC-1707581020000-91",
+      "op": "UPDATE",
+      "subject_name": "Trinity",
+      "subject_role": "Operator",
+      "updated_field": "clearance_level",
+      "updated_value": "Zion-Command",
+      "note": "Trinity's clearance level was upgraded to Zion-Command following her exfiltration of Neo from Machine City.",
+      "timestamp": "2026-07-08T14:26:00.000Z"
+    },
+    {
+      "change_id": "PC-1707581033000-12",
+      "op": "UPDATE",
+      "subject_name": "Cypher",
+      "subject_role": "Redpill",
+      "updated_field": "status",
+      "updated_value": "flagged_rogue",
+      "note": "Cypher was flagged rogue after intercepted comms revealed contact with Agent Smith.",
+      "timestamp": "2026-07-08T14:27:12.000Z"
+    }
+  ]
+}

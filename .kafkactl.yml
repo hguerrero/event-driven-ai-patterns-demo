@@ -1,0 +1,7 @@
+contexts:
+    default:
+      brokers:
+        - localhost:9092
+    zion-mainframe:
+      brokers:
+        - localhost:19092

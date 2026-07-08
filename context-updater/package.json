@@ -1,0 +1,19 @@
+{
+  "name": "context-updater",
+  "version": "1.0.0",
+  "description": "The Oracle — consumes oracle.profile.changes (simulated CDC) and immediately embeds each change into the RAG vector store via Kong AI Gateway's ai-rag-injector plugin",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "@types/node": "^22.15.0"
+  }
+}
