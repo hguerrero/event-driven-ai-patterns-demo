@@ -66,7 +66,9 @@ flowchart TB
 
 **One Kafka backend, one virtual cluster.** Unlike the baseline SKO demo (three virtual clusters simulating three regions), this demo uses a single KEG virtual cluster (`Zion_Mainframe`, passthrough mode) so the topic graph above is the entire story — no region-hopping needed to follow it.
 
-**Provisioning is declarative via `kongctl`, not Terraform.** The Konnect control-plane resources (gateway, backend cluster, virtual cluster, listener, schema-registry binding) are all defined in one YAML file, `event-gateway/kongctl/config.yaml`, and pushed with `kongctl apply -f kongctl/config.yaml` — mirroring the pattern used in [`kong-event-gw-examples`](../kong-event-gw-examples). The KEG data-plane itself just runs as a plain container via `event-gateway/docker-compose.yaml` (image `kong/kong-event-gateway:1.2.0`), authenticating to Konnect over mTLS using a certificate registered once via `kongctl apply -f kongctl/data_plane_certificate.yaml`.
+**Provisioning is declarative via `kongctl`, not Terraform — for both gateways.** The Event Gateway's Konnect resources (gateway, backend cluster, virtual cluster, listener, schema-registry binding) are defined in `event-gateway/kongctl/config.yaml` and pushed with `kongctl apply -f kongctl/config.yaml`, mirroring the pattern used in [`kong-event-gw-examples`](../kong-event-gw-examples). The KEG data-plane runs as a plain container via `event-gateway/docker-compose.yaml` (image `kong/kong-event-gateway:1.2.0`), authenticating to Konnect over mTLS with a certificate registered once via `kongctl apply -f kongctl/data_plane_certificate.yaml`.
+
+The AI Gateway follows the same shape, adapted to Kong Gateway's resource model: `ai-gateway/kongctl/config.yaml` declares a Konnect `control_planes` resource named `ai-gateway` with a `_deck` block pointing at `ai-gateway/kongctl/kong.yaml` — kongctl's built-in decK integration, which runs `deck gateway apply` against that control plane for you. `kong.yaml` is an ordinary Kong declarative file (the `ai-gw` service, `/chat` route, and the `ai-proxy` / `ai-rag-injector` / `cors` plugins), but instead of being loaded directly into a DB-less Kong node, it's pushed to Konnect and replicated down to a self-hosted Kong Gateway **data-plane** container (`ai-gateway/docker-compose.yaml`, `KONG_ROLE=data_plane`, hybrid mode) that stays local so it can reach the Redis vector store on the same Docker network. Both gateways are provisioned the same way: generate an mTLS cert, register it with `kongctl`, start the local data-plane container, then `kongctl apply` the actual configuration.
 
 **Five backend Node/TypeScript services**, all connecting through the KEG virtual cluster (`localhost:19092`) with `kafkajs`, using `volcano-sdk` (OpenAI `gpt-4o-mini`) for the three LLM-powered agents:
 
@@ -82,9 +84,9 @@ flowchart TB
 
 - Docker + Docker Compose
 - Node.js >= 18
-- [`kongctl`](https://konghq.com/products/kong-konnect/event-gateway) (provisions Kong Event Gateway declaratively against Konnect)
-- `openssl` (generates the KEG data-plane mTLS certificate)
-- A Kong Konnect account + Personal Access Token (for KEG provisioning)
+- [`kongctl`](https://developer.konghq.com/kongctl/) (provisions both Kong Event Gateway and the Kong Gateway AI Gateway control plane declaratively against Konnect; bundles decK for the latter)
+- `openssl` (generates the mTLS certificates for both data-plane containers)
+- A Kong Konnect account + Personal Access Token
 - An OpenAI API key (LLM agents + embeddings + chat)
 
 ## Setup
@@ -122,9 +124,24 @@ docker compose up -d          # starts the KEG data plane
 kongctl apply -f kongctl/config.yaml   # pushes backend cluster, virtual cluster, schema policy
 cd ..
 
-# 4. Kong AI Gateway (ai-proxy + ai-rag-injector + Redis vector store)
+# 4. Provision the AI Gateway control plane (ai-proxy + ai-rag-injector) via kongctl
 cd ai-gateway
-OPENAI_API_KEY=$OPENAI_API_KEY docker compose up -d
+mkdir -p kongctl/certs
+openssl req -new -x509 -nodes -newkey ec:<(openssl ecparam -name secp384r1) \
+  -keyout kongctl/certs/tls.key \
+  -out    kongctl/certs/tls.crt \
+  -days 1095 -subj "/CN=kong_clustering"
+
+kongctl apply -f kongctl/data_plane_certificate.yaml
+
+cp konnect.env.example konnect.env
+# Edit konnect.env: in Konnect, open the `ai-gateway` control plane -> New Data
+# Plane Node -> Docker tab, and copy the KONG_CLUSTER_* endpoint hostnames in.
+# Fill in OPENAI_API_KEY too (used by the {vault://env/OPENAI_API_KEY}
+# references in kongctl/kong.yaml).
+
+docker compose up -d                    # starts the AI Gateway data plane + Redis
+kongctl apply -f kongctl/config.yaml    # pushes the ai-proxy/ai-rag-injector config via deck
 cd ..
 
 # 5. Install dependencies for every service
@@ -140,7 +157,7 @@ npm run dev     # starts the React UI (:3000) + Express/WS server (:3001)
 
 Open **http://localhost:3000**. Use the header's **Start All** button to launch the five backend services — no more terminals needed for the actual presentation.
 
-Steps 2–4 are one-time bootstrap; for a repeat demo you only need `docker compose up -d` in each of the three compose directories (`kafka/`, `event-gateway/`, `ai-gateway/`) plus step 6.
+Steps 2–4 are one-time bootstrap (the `kongctl apply` calls only need re-running when the declarative config actually changes); for a repeat demo you only need `docker compose up -d` in each of the three compose directories (`kafka/`, `event-gateway/`, `ai-gateway/`) plus step 6.
 
 ## Demo script (~4 minutes)
 
@@ -189,7 +206,14 @@ event-driven-ai-patterns-demo/
 │       ├── data_plane_certificate.yaml
 │       ├── config.yaml           # backend cluster, virtual cluster, schema-validation policy
 │       └── certs/                # mTLS identity (gitignored)
-├── ai-gateway/                   # Kong Gateway + Redis (ai-proxy, ai-rag-injector)
+├── ai-gateway/                   # AI Gateway data-plane docker-compose + kongctl/decK config
+│   ├── docker-compose.yaml       # Kong Gateway data-plane container (hybrid mode) + Redis
+│   ├── konnect.env.example
+│   └── kongctl/
+│       ├── data_plane_certificate.yaml
+│       ├── config.yaml           # control_planes + _deck pointer to kong.yaml
+│       ├── kong.yaml             # decK state file: ai-gw service, /chat route, ai-proxy/ai-rag-injector/cors plugins
+│       └── certs/                # mTLS identity (gitignored)
 └── matrix-ui/                    # Dashboard + control plane (React + Express/WS)
 ```
 
@@ -206,7 +230,8 @@ Full JSON Schemas live in `kafka/config/schemas/`.
 
 ## Notes / known limitations
 
-- This sandbox build could not reach the npm registry, run Docker, or run `kongctl`, so `npm install`, `tsc --noEmit`, `docker compose config`, and `kongctl apply` should be run once more in a networked environment before a live customer demo — treat this repo as code-complete but not yet execution-verified end-to-end.
-- The `ai-gateway/kong-config/kong.yaml` uses Kong's built-in `{vault://env/OPENAI_API_KEY}` env-vault syntax (Kong Gateway 3.x, no license required) — confirm this resolves correctly against your Kong Gateway version before presenting.
-- `event-gateway/kongctl/certs/` is intentionally not populated with real key material — generate the mTLS cert/key pair yourself with the `openssl` command in the Setup section above (only `tls.crt` ever leaves your machine, via `kongctl apply`).
+- This sandbox build could not reach the npm registry, run Docker, run `kongctl`, or reach Konnect, so `npm install`, `tsc --noEmit`, `docker compose config`, `kongctl apply`, and the decK push should all be run once more in a networked environment before a live customer demo — treat this repo as code-complete but not yet execution-verified end-to-end.
+- `ai-gateway/kongctl/kong.yaml` uses Kong's built-in `{vault://env/OPENAI_API_KEY}` env-vault syntax (Kong Gateway 3.x, no license required) — this is resolved locally by the data-plane container's own process environment at request time, regardless of the fact that the plugin config arrived via decK/Konnect rather than a local file. Confirm this resolves correctly against your Kong Gateway version before presenting.
+- Neither `event-gateway/kongctl/certs/` nor `ai-gateway/kongctl/certs/` are populated with real key material — generate each mTLS cert/key pair yourself with the `openssl` commands in the Setup section above (only the public cert ever leaves your machine, via `kongctl apply`). Note the AI Gateway's cert uses an EC key (`ec:secp384r1`) per Kong Gateway's own hybrid-mode convention, while the Event Gateway's uses RSA — both are correct for their respective product.
+- The `KONG_CLUSTER_CONTROL_PLANE` / `KONG_CLUSTER_TELEMETRY_ENDPOINT` hostnames in `ai-gateway/konnect.env` are unique to your Konnect org/region and can only be obtained from the Konnect UI after the `ai-gateway` control plane exists (Gateway Manager → New Data Plane Node → Docker tab) — they can't be derived ahead of time.
 - The exact `kongctl apply`/`kongctl get` flag syntax (e.g. `--jq`) mirrors what's used in [`kong-event-gw-examples`](../kong-event-gw-examples) — reconfirm against your installed `kongctl` version's `--help` output if it errors.

@@ -1,13 +1,32 @@
+# ============================================================================
+# decK state file — pushed to the `ai-gateway` Konnect control plane by
+# kongctl's `_deck` integration (see ../kongctl/config.yaml). This is the
+# same Kong declarative format used for self-hosted Kong Gateway; kongctl
+# runs `deck gateway apply` against the Konnect control plane on your
+# behalf, and Konnect replicates the resulting config down to any connected
+# data-plane nodes (see ../docker-compose.yaml).
+#
+# `select_tags` / `tags` scope this file's ownership so a future
+# `kongctl sync` only manages the resources tagged here, matching the
+# `_deck.flags: [--select-tag=...]` set in ../kongctl/config.yaml.
+# ============================================================================
 _format_version: "3.0"
+_info:
+  select_tags:
+    - event-driven-ai-patterns
 
 services:
 - name: ai-gw
+  tags:
+  - event-driven-ai-patterns
   # Upstream is unused directly by ai-proxy (which overrides the request
   # target based on model.options.upstream_url below) but Kong still
   # requires a service url to be configured.
   url: https://api.openai.com
   routes:
   - name: chat
+    tags:
+    - event-driven-ai-patterns
     paths:
     - /chat
     plugins:

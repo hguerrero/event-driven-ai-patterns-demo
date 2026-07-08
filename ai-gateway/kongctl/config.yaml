@@ -1,0 +1,33 @@
+# ============================================================================
+# Event-Driven AI Patterns Demo — AI Gateway (Kong Gateway) configuration
+#
+# Pushes the ai-proxy + ai-rag-injector + cors service/route/plugin config in
+# kongctl/kong.yaml to the `ai-gateway` Konnect control plane via decK,
+# through kongctl's `_deck` integration — kongctl runs `deck gateway apply`
+# under the hood, so no separate `deck` invocation is needed.
+#
+# Apply (after data_plane_certificate.yaml has been applied and the data
+# plane container in ../docker-compose.yaml is up and connected — see the
+# root README's "Provision Kong AI Gateway" section):
+#   export KONGCTL_DEFAULT_KONNECT_PAT=<your-personal-access-token>
+#   kongctl apply -f kongctl/config.yaml
+# ============================================================================
+
+_defaults:
+  kongctl:
+    namespace: event-driven-ai-patterns
+
+control_planes:
+  - ref: ai-gateway-cp
+    name: ai-gateway
+    description: Event-Driven AI Patterns Demo — The Oracle (CDC-to-RAG) AI Gateway
+    cluster_type: CLUSTER_TYPE_CONTROL_PLANE
+    labels:
+      env: demo
+      project: event-driven-ai-patterns
+
+    _deck:
+      files:
+        - "kong.yaml"
+      flags:
+        - "--select-tag=event-driven-ai-patterns"
