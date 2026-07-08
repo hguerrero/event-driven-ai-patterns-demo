@@ -66,6 +66,8 @@ flowchart TB
 
 **One Kafka backend, one virtual cluster.** Unlike the baseline SKO demo (three virtual clusters simulating three regions), this demo uses a single KEG virtual cluster (`Zion_Mainframe`, passthrough mode) so the topic graph above is the entire story — no region-hopping needed to follow it.
 
+**Provisioning is declarative via `kongctl`, not Terraform.** The Konnect control-plane resources (gateway, backend cluster, virtual cluster, listener, schema-registry binding) are all defined in one YAML file, `event-gateway/kongctl/config.yaml`, and pushed with `kongctl apply -f kongctl/config.yaml` — mirroring the pattern used in [`kong-event-gw-examples`](../kong-event-gw-examples). The KEG data-plane itself just runs as a plain container via `event-gateway/docker-compose.yaml` (image `kong/kong-event-gateway:1.2.0`), authenticating to Konnect over mTLS using a certificate registered once via `kongctl apply -f kongctl/data_plane_certificate.yaml`.
+
 **Five backend Node/TypeScript services**, all connecting through the KEG virtual cluster (`localhost:19092`) with `kafkajs`, using `volcano-sdk` (OpenAI `gpt-4o-mini`) for the three LLM-powered agents:
 
 - `data-generator` — produces `sentinel.readings` (~every 3s, ~1-in-4 anomalous) and `oracle.profile.changes` (~every 5s, simulated CDC).
@@ -80,7 +82,8 @@ flowchart TB
 
 - Docker + Docker Compose
 - Node.js >= 18
-- Terraform >= 1.5
+- [`kongctl`](https://konghq.com/products/kong-konnect/event-gateway) (provisions Kong Event Gateway declaratively against Konnect)
+- `openssl` (generates the KEG data-plane mTLS certificate)
 - A Kong Konnect account + Personal Access Token (for KEG provisioning)
 - An OpenAI API key (LLM agents + embeddings + chat)
 
@@ -88,18 +91,33 @@ flowchart TB
 
 ```bash
 # 1. Environment
-cp .env.example .env        # fill in OPENAI_API_KEY, KONNECT_TOKEN
-cd event-gateway && cp terraform.tfvars.example terraform.tfvars  # fill in konnect_token
-cd ..
+cp .env.example .env        # fill in OPENAI_API_KEY
 
-# 2. Backend Kafka cluster (3-node KRaft)
-docker network create keg-network   # first time only
+# 2. Backend Kafka cluster (3-node KRaft) + Apicurio schema registry
 docker compose up -d
+docker compose --profile init up    # creates topics + registers schemas, then exits
 
-# 3. Provision Kong Event Gateway (Zion_Mainframe virtual cluster) via Konnect
+# 3. Provision Kong Event Gateway (Zion_Mainframe virtual cluster) via kongctl
 cd event-gateway
-terraform init
-terraform apply
+mkdir -p kongctl/certs
+openssl req -new -x509 -nodes -newkey rsa:2048 \
+  -subj "/CN=event-gateway/C=US" \
+  -keyout kongctl/certs/key.crt \
+  -out    kongctl/certs/tls.crt
+
+export KONGCTL_DEFAULT_KONNECT_PAT=<your-personal-access-token>
+kongctl apply -f kongctl/data_plane_certificate.yaml
+
+CLUSTER_ID=$(kongctl get event-gateway event-driven-ai-patterns-gateway \
+  --output json --jq '.id' --jq-raw-output)
+
+cp konnect.env.example konnect.env
+# Edit konnect.env: set KONG_KONNECT_REGION, KONG_KONNECT_DOMAIN, and paste $CLUSTER_ID
+printf 'KONG_KONNECT_CLIENT_CERT="%s"\n' "$(cat kongctl/certs/tls.crt)" >> konnect.env
+printf 'KONG_KONNECT_CLIENT_KEY="%s"\n'  "$(cat kongctl/certs/key.crt)"  >> konnect.env
+
+docker compose up -d          # starts the KEG data plane
+kongctl apply -f kongctl/config.yaml   # pushes backend cluster, virtual cluster, schema policy
 cd ..
 
 # 4. Kong AI Gateway (ai-proxy + ai-rag-injector + Redis vector store)
@@ -119,6 +137,8 @@ npm run dev     # starts the React UI (:3000) + Express/WS server (:3001)
 ```
 
 Open **http://localhost:3000**. Use the header's **Start All** button to launch the five backend services — no more terminals needed for the actual presentation.
+
+Steps 2–4 are one-time bootstrap; for a repeat demo you only need `docker compose up -d` in each of the three compose directories (root, `event-gateway/`, `ai-gateway/`) plus step 6.
 
 ## Demo script (~4 minutes)
 
@@ -148,7 +168,7 @@ Point at the scrolling ledger.
 
 ```
 event-driven-ai-patterns-demo/
-├── docker-compose.yaml          # 3-node Kafka KRaft backend cluster
+├── docker-compose.yaml          # 3-node Kafka KRaft backend cluster + Apicurio + topic/schema bootstrap
 ├── .kafkactl.yml                # kafkactl contexts (backend + Zion_Mainframe VC)
 ├── .env.example
 ├── config/
@@ -159,8 +179,14 @@ event-driven-ai-patterns-demo/
 ├── sentinel-agent/
 ├── dispatch-agent/
 ├── context-updater/
-├── event-gateway/                # Terraform: KEG provisioning via Konnect
-└── ai-gateway/                   # Kong Gateway + Redis (ai-proxy, ai-rag-injector)
+├── event-gateway/                # KEG data-plane docker-compose + kongctl declarative config
+│   ├── docker-compose.yaml       # KEG data-plane container (kong/kong-event-gateway:1.2.0)
+│   ├── konnect.env.example
+│   └── kongctl/
+│       ├── data_plane_certificate.yaml
+│       ├── config.yaml           # backend cluster, virtual cluster, schema-validation policy
+│       └── certs/                # mTLS identity (gitignored)
+├── ai-gateway/                   # Kong Gateway + Redis (ai-proxy, ai-rag-injector)
 └── matrix-ui/                    # Dashboard + control plane (React + Express/WS)
 ```
 
@@ -177,6 +203,7 @@ Full JSON Schemas live in `config/schemas/`.
 
 ## Notes / known limitations
 
-- This sandbox build could not reach the npm registry, run Docker, or run Terraform, so `npm install`, `tsc --noEmit`, `docker compose config`, and `terraform validate` should be run once more in a networked environment before a live customer demo — treat this repo as code-complete but not yet execution-verified end-to-end.
+- This sandbox build could not reach the npm registry, run Docker, or run `kongctl`, so `npm install`, `tsc --noEmit`, `docker compose config`, and `kongctl apply` should be run once more in a networked environment before a live customer demo — treat this repo as code-complete but not yet execution-verified end-to-end.
 - The `ai-gateway/kong-config/kong.yaml` uses Kong's built-in `{vault://env/OPENAI_API_KEY}` env-vault syntax (Kong Gateway 3.x, no license required) — confirm this resolves correctly against your Kong Gateway version before presenting.
-- `event-gateway/certs/` is intentionally not populated — `keg_data_plane.tf` generates TLS material on `terraform apply`.
+- `event-gateway/kongctl/certs/` is intentionally not populated with real key material — generate the mTLS cert/key pair yourself with the `openssl` command in the Setup section above (only `tls.crt` ever leaves your machine, via `kongctl apply`).
+- The exact `kongctl apply`/`kongctl get` flag syntax (e.g. `--jq`) mirrors what's used in [`kong-event-gw-examples`](../kong-event-gw-examples) — reconfirm against your installed `kongctl` version's `--help` output if it errors.

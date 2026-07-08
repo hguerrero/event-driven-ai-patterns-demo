@@ -1,0 +1,33 @@
+# ============================================================================
+# Data Plane Certificate
+#
+# NOTE: Generate the certificate before applying.
+#
+#   openssl req -new -x509 -nodes -newkey rsa:2048 \
+#     -subj "/CN=event-gateway/C=US" \
+#     -keyout kongctl/certs/key.crt \
+#     -out    kongctl/certs/tls.crt
+#
+# The private key (key.crt) stays local — only tls.crt is uploaded to Konnect.
+#
+# Apply:
+#   kongctl apply -f kongctl/data_plane_certificate.yaml
+# ============================================================================
+
+_defaults:
+  kongctl:
+    namespace: event-driven-ai-patterns
+
+event_gateways:
+  - ref: event-driven-ai-patterns-gateway
+    name: event-driven-ai-patterns-gateway
+    labels:
+      env: demo
+      project: event-driven-ai-patterns
+    data_plane_certificates:
+      - ref: keg-data-plane-cert
+        name: keg-data-plane-cert
+        labels:
+          env: demo
+          role: data-plane-cert
+        certificate: !file ./certs/tls.crt

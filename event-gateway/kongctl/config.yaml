@@ -1,0 +1,117 @@
+# ============================================================================
+# Event-Driven AI Patterns Demo — Kong Event Gateway configuration
+#
+# One backend cluster (the 3-node Kafka KRaft cluster from ../../docker-compose.yaml),
+# one flat passthrough virtual cluster (Zion_Mainframe, anonymous auth), and a
+# schema-validation produce policy on `sentinel.readings` backed by the
+# Apicurio registry that ships alongside Kafka in ../../docker-compose.yaml.
+#
+# Unlike a multi-phase governance walkthrough, this demo only needs one
+# gateway config — the three EDA-for-AI patterns it showcases (fan-out
+# orchestration, CDC-to-RAG context updates, and the durable audit log) all
+# live at the application/Kafka-topic level, not in the gateway's tenancy
+# model. One virtual cluster is enough to carry all four topics.
+#
+# Apply:
+#   export KONGCTL_DEFAULT_KONNECT_PAT=<your-personal-access-token>
+#   kongctl apply -f kongctl/config.yaml
+# ============================================================================
+
+_defaults:
+  kongctl:
+    namespace: event-driven-ai-patterns
+
+event_gateways:
+  - ref: event-driven-ai-patterns-gateway
+    name: event-driven-ai-patterns-gateway
+    description: Event-Driven AI Patterns Demo — Agent Smith Protocol / The Oracle / The Zion Archive
+    labels:
+      env: demo
+      project: event-driven-ai-patterns
+
+    backend_clusters:
+      - ref: local-kafka
+        name: local-kafka
+        description: 3-broker KRaft Kafka cluster running in Docker (../../docker-compose.yaml)
+        labels:
+          env: demo
+          role: message-broker
+          tier: backend
+        authentication:
+          type: anonymous
+        bootstrap_servers:
+          - kafka1:9092
+          - kafka2:9092
+          - kafka3:9092
+        tls:
+          enabled: false
+        insecure_allow_anonymous_virtual_cluster_auth: true
+
+    schema_registries:
+      - ref: apicurio-schema-registry
+        type: confluent
+        name: apicurio-schema-registry
+        description: Confluent-compatible schema registry powered by Apicurio (../../docker-compose.yaml)
+        labels:
+          env: demo
+          role: schema-registry
+        config:
+          schema_type: json
+          endpoint: http://apicurio-registry:8080/apis/ccompat/v7
+          timeout_seconds: 8
+
+    listeners:
+      - ref: zion-mainframe-listener
+        name: zion-mainframe-listener
+        labels:
+          env: demo
+          role: ingress
+        addresses:
+          - "0.0.0.0"
+        ports:
+          - "19092-19190"
+        policies:
+          - ref: forward-to-zion-mainframe
+            type: forward_to_virtual_cluster
+            name: forward-to-zion-mainframe
+            labels:
+              env: demo
+              role: routing
+            config:
+              type: port_mapping
+              destination:
+                id: !ref zion-mainframe
+              advertised_host: localhost
+              bootstrap_port: none
+              min_broker_id: 0
+
+    virtual_clusters:
+      - ref: zion-mainframe
+        name: zion-mainframe
+        description: Single flat passthrough virtual cluster carrying sentinel telemetry, Agent Smith Protocol fan-out events, Oracle CDC changes, and the Zion Archive audit log.
+        labels:
+          env: demo
+          role: virtual-cluster
+          pattern: event-driven-ai
+        destination:
+          id: !ref local-kafka
+        acl_mode: passthrough
+        dns_label: zion-mainframe
+        authentication:
+          - type: anonymous
+
+        produce_policies:
+          - ref: sentinel-reading-schema-validation
+            type: schema_validation
+            name: sentinel-reading-schema-validation
+            labels:
+              env: demo
+              role: schema-validation
+            description: Validates sentinel.readings payloads against the registered JSON Schema before they reach the broker.
+            enabled: true
+            condition: "context.topic.name == 'sentinel.readings'"
+            config:
+              type: confluent_schema_registry
+              schema_registry:
+                id: !ref apicurio-schema-registry
+              value_validation_action: reject

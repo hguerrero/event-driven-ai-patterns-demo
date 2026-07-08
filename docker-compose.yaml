@@ -3,8 +3,6 @@ name: kafka_cluster
 networks:
   kafka:
     name: keg-network
-    external: true
-
 
 services:
   kafka1:
@@ -66,3 +64,119 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka1:9093,1@kafka2:9093,2@kafka3:9093
       KAFKA_CLUSTER_ID: 'abcdefghijklmnopqrstuv'
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+
+  # ---------------------------------------------------------------------------
+  # Apicurio Schema Registry (Confluent-compatible API) — backs the KEG
+  # schema-validation produce policy on `sentinel.readings` (see
+  # ../event-gateway/kongctl/config.yaml).
+  # ---------------------------------------------------------------------------
+  apicurio-registry:
+    image: apicurio/apicurio-registry:3.1.7
+    container_name: apicurio-registry
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - kafka
+
+  apicurio-registry-ui:
+    image: apicurio/apicurio-registry-ui:3.1.7
+    container_name: apicurio-registry-ui
+    restart: unless-stopped
+    depends_on:
+      - apicurio-registry
+    ports:
+      - "8888:8080"
+    networks:
+      - kafka
+
+  # ---------------------------------------------------------------------------
+  # One-shot bootstrap helpers — run with `docker compose --profile init up`
+  # after the brokers and registry are healthy.
+  # ---------------------------------------------------------------------------
+  register-schema:
+    image: curlimages/curl:8.8.0
+    container_name: register-schema
+    profiles:
+      - init
+    restart: "no"
+    depends_on:
+      - apicurio-registry
+    volumes:
+      - ./config/schemas:/schemas:ro
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        echo "Waiting for Apicurio Registry to be ready..."
+        for i in $$(seq 1 30); do
+          if curl -s -o /dev/null -w "%{http_code}" http://apicurio-registry:8080/apis/ccompat/v7/subjects | grep -q "200"; then
+            echo "Apicurio Registry (Confluent compat) is ready."
+            break
+          fi
+          echo "Attempt $$i/30 - Registry not ready yet, waiting 5s..."
+          sleep 5
+        done
+
+        echo "Registering JSON Schema for sentinel.readings..."
+        SCHEMA_1=$$(cat /schemas/sentinel_reading.json | tr -d '\n' | sed 's/"/\\"/g')
+        curl -sS -X POST \
+          -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data "{\"schema\":\"$${SCHEMA_1}\",\"schemaType\":\"JSON\"}" \
+          http://apicurio-registry:8080/apis/ccompat/v7/subjects/sentinel.readings-value/versions
+
+        echo "Registering JSON Schema for agent.orchestration.events..."
+        SCHEMA_2=$$(cat /schemas/orchestration_event.json | tr -d '\n' | sed 's/"/\\"/g')
+        curl -sS -X POST \
+          -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data "{\"schema\":\"$${SCHEMA_2}\",\"schemaType\":\"JSON\"}" \
+          http://apicurio-registry:8080/apis/ccompat/v7/subjects/agent.orchestration.events-value/versions
+
+        echo "Registering JSON Schema for oracle.profile.changes..."
+        SCHEMA_3=$$(cat /schemas/profile_change.json | tr -d '\n' | sed 's/"/\\"/g')
+        curl -sS -X POST \
+          -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data "{\"schema\":\"$${SCHEMA_3}\",\"schemaType\":\"JSON\"}" \
+          http://apicurio-registry:8080/apis/ccompat/v7/subjects/oracle.profile.changes-value/versions
+
+        echo "Registering JSON Schema for zion.archive.log..."
+        SCHEMA_4=$$(cat /schemas/archive_entry.json | tr -d '\n' | sed 's/"/\\"/g')
+        curl -sS -X POST \
+          -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data "{\"schema\":\"$${SCHEMA_4}\",\"schemaType\":\"JSON\"}" \
+          http://apicurio-registry:8080/apis/ccompat/v7/subjects/zion.archive.log-value/versions
+
+        echo ""
+        echo "Schema registration complete."
+    networks:
+      - kafka
+
+  create-topics:
+    image: deviceinsight/kafkactl:latest
+    container_name: create-topics
+    profiles:
+      - init
+    restart: "no"
+    environment:
+      BROKERS: kafka1:9092
+    volumes:
+      - ./config/topics.txt:/config/topics.txt:ro
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        echo "Creating Kafka topics from config/topics.txt..."
+        while IFS= read -r topic || [ -n "$$topic" ]; do
+          [ -z "$$topic" ] && continue
+          echo "  -> Creating topic: $$topic"
+          if kafkactl describe topic "$$topic" >/dev/null 2>&1; then
+            echo "     Topic already exists, skipping."
+          else
+            kafkactl create topic "$$topic" \
+              --partitions 3 \
+              --replication-factor 3
+          fi
+        done < /config/topics.txt
+        echo "Topic creation complete."
+    networks:
+      - kafka
