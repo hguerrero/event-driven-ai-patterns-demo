@@ -94,8 +94,10 @@ flowchart TB
 cp .env.example .env        # fill in OPENAI_API_KEY
 
 # 2. Backend Kafka cluster (3-node KRaft) + Apicurio schema registry
+cd kafka
 docker compose up -d
 docker compose --profile init up    # creates topics + registers schemas, then exits
+cd ..
 
 # 3. Provision Kong Event Gateway (Zion_Mainframe virtual cluster) via kongctl
 cd event-gateway
@@ -138,7 +140,7 @@ npm run dev     # starts the React UI (:3000) + Express/WS server (:3001)
 
 Open **http://localhost:3000**. Use the header's **Start All** button to launch the five backend services — no more terminals needed for the actual presentation.
 
-Steps 2–4 are one-time bootstrap; for a repeat demo you only need `docker compose up -d` in each of the three compose directories (root, `event-gateway/`, `ai-gateway/`) plus step 6.
+Steps 2–4 are one-time bootstrap; for a repeat demo you only need `docker compose up -d` in each of the three compose directories (`kafka/`, `event-gateway/`, `ai-gateway/`) plus step 6.
 
 ## Demo script (~4 minutes)
 
@@ -168,12 +170,13 @@ Point at the scrolling ledger.
 
 ```
 event-driven-ai-patterns-demo/
-├── docker-compose.yaml          # 3-node Kafka KRaft backend cluster + Apicurio + topic/schema bootstrap
 ├── .kafkactl.yml                # kafkactl contexts (backend + Zion_Mainframe VC)
 ├── .env.example
-├── config/
-│   ├── topics.txt
-│   └── schemas/                 # JSON Schema per topic
+├── kafka/                        # Everything needed to run the backend Kafka cluster
+│   ├── docker-compose.yaml       # 3-node KRaft cluster + Apicurio + topic/schema bootstrap
+│   └── config/
+│       ├── topics.txt
+│       └── schemas/              # JSON Schema per topic
 ├── data-generator/
 ├── anomaly-detector-agent/
 ├── sentinel-agent/
@@ -199,7 +202,7 @@ event-driven-ai-patterns-demo/
 | `oracle.profile.changes` | data-generator | context-updater |
 | `zion.archive.log` | anomaly-detector-agent, sentinel-agent, dispatch-agent, context-updater | matrix-ui |
 
-Full JSON Schemas live in `config/schemas/`.
+Full JSON Schemas live in `kafka/config/schemas/`.
 
 ## Notes / known limitations
 
