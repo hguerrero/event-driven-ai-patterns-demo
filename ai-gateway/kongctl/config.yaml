@@ -29,5 +29,3 @@ control_planes:
     _deck:
       files:
         - "kong.yaml"
-      flags:
-        - "--select-tag=event-driven-ai-patterns"

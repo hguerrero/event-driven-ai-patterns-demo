@@ -34,6 +34,7 @@ services:
       - KONG_PROXY_ERROR_LOG=/dev/stderr
       - KONG_ADMIN_ACCESS_LOG=/dev/stdout
       - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ROUTER_FLAVOR=expressions
     depends_on:
       - redis
 

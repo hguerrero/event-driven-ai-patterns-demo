@@ -135,8 +135,21 @@ openssl req -new -x509 -nodes -newkey ec:<(openssl ecparam -name secp384r1) \
 kongctl apply -f kongctl/data_plane_certificate.yaml
 
 cp konnect.env.example konnect.env
-# Edit konnect.env: in Konnect, open the `ai-gateway` control plane -> New Data
-# Plane Node -> Docker tab, and copy the KONG_CLUSTER_* endpoint hostnames in.
+
+# Populate KONG_CLUSTER_* endpoint variables automatically from Konnect:
+CP=$(kongctl get gateway control-plane ai-gateway \
+  --output json --jq '.config.control_plane_endpoint' --jq-raw-output \
+  | sed 's|https://||')
+TP=$(kongctl get gateway control-plane ai-gateway \
+  --output json --jq '.config.telemetry_endpoint' --jq-raw-output \
+  | sed 's|https://||')
+sed -i '' \
+  -e "s|KONG_CLUSTER_CONTROL_PLANE=.*|KONG_CLUSTER_CONTROL_PLANE=${CP}:443|" \
+  -e "s|KONG_CLUSTER_SERVER_NAME=.*|KONG_CLUSTER_SERVER_NAME=${CP}|" \
+  -e "s|KONG_CLUSTER_TELEMETRY_ENDPOINT=.*|KONG_CLUSTER_TELEMETRY_ENDPOINT=${TP}:443|" \
+  -e "s|KONG_CLUSTER_TELEMETRY_SERVER_NAME=.*|KONG_CLUSTER_TELEMETRY_SERVER_NAME=${TP}|" \
+  konnect.env
+
 # Fill in OPENAI_API_KEY too (used by the {vault://env/OPENAI_API_KEY}
 # references in kongctl/kong.yaml).
 
