@@ -1,5 +1,11 @@
+import dns from "node:dns";
 import { Kafka, logLevel } from "kafkajs";
 import { agent, llmOpenAI } from "volcano-sdk";
+
+// Prefer IPv4 when resolving api.openai.com etc. — see anomaly-detector-agent
+// for why (avoids spurious "fetch failed" / AggregateError on networks with
+// broken IPv6 routing).
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------------------------------------------------------------------
 // Config — connects through the single Zion_Mainframe virtual cluster

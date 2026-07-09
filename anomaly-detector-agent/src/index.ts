@@ -1,5 +1,13 @@
+import dns from "node:dns";
 import { Kafka, logLevel } from "kafkajs";
 import { agent, llmOpenAI } from "volcano-sdk";
+
+// Prefer IPv4 when resolving api.openai.com etc. Some networks (corporate
+// Wi-Fi/VPN in particular) advertise broken/unreachable IPv6 routes; Node's
+// undici-based fetch then fails with a generic "fetch failed" wrapping an
+// AggregateError instead of falling back to IPv4 cleanly. This is a no-op
+// on networks where IPv6 works fine.
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------------------------------------------------------------------
 // Config — connects through the single Zion_Mainframe virtual cluster

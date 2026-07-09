@@ -1,5 +1,11 @@
 require("dotenv").config();
 
+const dns = require("node:dns");
+// Prefer IPv4 when resolving external hosts (Kong AI Gateway is local, but
+// this also protects any future outbound calls) — avoids spurious
+// "fetch failed" / AggregateError on networks with broken IPv6 routing.
+dns.setDefaultResultOrder("ipv4first");
+
 const express = require("express");
 const cors = require("cors");
 const WebSocket = require("ws");

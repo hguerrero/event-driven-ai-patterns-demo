@@ -1,4 +1,10 @@
+import dns from "node:dns";
 import { Kafka, logLevel } from "kafkajs";
+
+// Prefer IPv4 when resolving the Kong Admin API host etc. — see
+// anomaly-detector-agent for why (avoids spurious "fetch failed" /
+// AggregateError on networks with broken IPv6 routing).
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------------------------------------------------------------------
 // Config — connects through the single Zion_Mainframe virtual cluster
