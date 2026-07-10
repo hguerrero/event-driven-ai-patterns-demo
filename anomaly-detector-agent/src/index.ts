@@ -1,6 +1,6 @@
 import dns from "node:dns";
 import { Kafka, logLevel } from "kafkajs";
-import { agent, llmOpenAI } from "volcano-sdk";
+import { agent, llmOpenAI, VolcanoError } from "@volcano.dev/agent";
 
 // Prefer IPv4 when resolving api.openai.com etc. Some networks (corporate
 // Wi-Fi/VPN in particular) advertise broken/unreachable IPv6 routes; Node's
@@ -161,7 +161,24 @@ async function main() {
 
         console.log(`✅ Processed ${readingId} → ${archiveEntry.action}\n`);
       } catch (err) {
-        console.error("❌ Failed to process reading:", err);
+        if (err && typeof err === "object" && "meta" in err) {
+          const e = err as VolcanoError;
+
+          console.error(e.name, e.message);
+          console.error("Metadata:", {
+            stepId: e.meta.stepId, // 0-based step index
+            provider: e.meta.provider, // llm:openai or mcp:localhost
+            requestId: e.meta.requestId, // Upstream request ID
+            retryable: e.meta.retryable, // Should retry?
+          });
+
+          if (e.meta?.retryable) {
+            // Maybe enqueue for retry later
+          }
+        }
+        else {
+          console.error("❌ Failed to process reading:", err);
+        }
       }
     },
   });
