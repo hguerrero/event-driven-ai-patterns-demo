@@ -8,7 +8,7 @@ services:
   # declarative file. Konnect also handles Enterprise licensing for
   # connected data planes, so no KONG_LICENSE_DATA is needed here.
   kong:
-    image: kong/kong-gateway:3.13
+    image: kong/kong-gateway:3.15
     container_name: ai-gateway-kong
     hostname: kong
     restart: unless-stopped

@@ -17,6 +17,7 @@ Thumbs.db
 **/certs/
 
 konnect.env
+ee.env
 
 # Node.js
 node_modules/
