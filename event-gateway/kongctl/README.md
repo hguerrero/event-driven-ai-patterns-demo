@@ -14,7 +14,7 @@ This folder contains Kong Konnect control-plane resources used by this demo's bo
 1. Generate a certificate/key pair into `certs/`.
 2. `kongctl apply -f kongctl/data_plane_certificate.yaml`
 3. Retrieve the gateway's cluster ID and paste the cert/key/cluster ID into `../konnect.env`.
-4. `docker compose up -d` (from `event-gateway/`) to start the KEG data plane.
+4. `docker compose up -d` (from `event-gateway/`) to start the KEG data plane, which also exposes a health/readiness listener on `:8080` (`KEG__RUNTIME__HEALTH_LISTENER_ADDRESS_PORT`) — check `kong/kong-event-gateway` docs for the exact endpoint path, but it's a quick way to confirm the data plane is up before relying on it for a demo.
 5. `kongctl apply -f kongctl/config.yaml` to push the backend cluster, virtual cluster, listener, and schema-validation policy.
 
 Full bootstrap commands are documented in the root [README](../../README.md).

@@ -13,7 +13,7 @@ This folder provisions the `ai-gateway` Kong Gateway control plane in Konnect de
 
 1. Generate a certificate/key pair into `certs/` (EC key — see the comment in `data_plane_certificate.yaml`).
 2. `kongctl apply -f kongctl/data_plane_certificate.yaml`
-3. Retrieve the control plane's cluster/telemetry endpoints from Konnect (Gateway Manager → `ai-gateway` → **New Data Plane Node** → Docker tab) and paste them into `../konnect.env`.
+3. Populate the control plane's cluster/telemetry endpoints into `../konnect.env` — the root README's Setup section does this automatically with `kongctl get gateway control-plane ai-gateway --output json --jq '.config.control_plane_endpoint'` (and `.config.telemetry_endpoint`); the Konnect UI (Gateway Manager → `ai-gateway` → **New Data Plane Node** → Docker tab) shows the same values if you'd rather copy them by hand.
 4. `docker compose up -d` (from `ai-gateway/`) to start the Kong Gateway data-plane container + Redis.
 5. `kongctl apply -f kongctl/config.yaml` to push the AI Gateway service/route/plugins via decK.
 
