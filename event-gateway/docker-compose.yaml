@@ -14,10 +14,11 @@ services:
       - konnect.env
     environment:
       KEG__OBSERVABILITY__LOG_FLAGS: info,keg=debug
+      KEG__RUNTIME__HEALTH_LISTENER_ADDRESS_PORT: "0.0.0.0:8080"
     volumes:
       - ./kongctl/certs:/etc/keg/certs:ro
     ports:
       - "19092-19190:19092-19190"
-      - "18080:8080"
+      - "8180:8080"
     networks:
       - keg
