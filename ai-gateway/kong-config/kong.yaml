@@ -1,19 +1,4 @@
-# ============================================================================
-# decK state file — pushed to the `ai-gateway` Konnect control plane by
-# kongctl's `_deck` integration (see ../kongctl/config.yaml). This is the
-# same Kong declarative format used for self-hosted Kong Gateway; kongctl
-# runs `deck gateway apply` against the Konnect control plane on your
-# behalf, and Konnect replicates the resulting config down to any connected
-# data-plane nodes (see ../docker-compose.yaml).
-#
-# `select_tags` / `tags` scope this file's ownership so a future
-# `kongctl sync` only manages the resources tagged here, matching the
-# `_deck.flags: [--select-tag=...]` set in ../kongctl/config.yaml.
-# ============================================================================
 _format_version: "3.0"
-_info:
-  select_tags:
-    - event-driven-ai-patterns
 
 services:
 - name: ai-gw
@@ -35,14 +20,14 @@ services:
         route_type: "llm/v1/chat"
         auth:
           header_name: "Authorization"
-          header_value: "Bearer {vault://env/OPENAI_API_KEY}"
+          header_value: "{vault://env/OPENAI_API_KEY}"
         model:
           provider: "openai"
           name: "gpt-4o-mini"
           options:
-            max_tokens: 1024
-            temperature: 0.5
-            upstream_url: https://api.openai.com/v1/chat/completions
+            max_tokens: 512
+            temperature: 1.0
+        max_request_body_size: 524288
 
     - name: ai-rag-injector
       config:
@@ -53,19 +38,17 @@ services:
         embeddings:
           auth:
             header_name: "Authorization"
-            header_value: "Bearer {vault://env/OPENAI_API_KEY}"
+            header_value: "{vault://env/OPENAI_API_KEY}"
           model:
             provider: openai
-            name: text-embedding-3-small
-            options:
-              upstream_url: https://api.openai.com/v1/embeddings
+            name: text-embedding-3-large
         vectordb:
           strategy: redis
           redis:
             host: redis
             port: 6379
           distance_metric: cosine
-          dimensions: 1536
+          dimensions: 3072
 
     - name: cors
       config:
