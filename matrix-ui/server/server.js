@@ -26,7 +26,7 @@ app.use(express.json());
 // ---------------------------------------------------------------------------
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:19092";
-const KONG_AI_GATEWAY_URL = process.env.KONG_AI_GATEWAY_URL || "http://localhost:8000";
+const KONG_AI_GATEWAY_URL = process.env.KONG_AI_GATEWAY_URL || "https://localhost:8443";
 const SERVER_PORT = process.env.SERVER_PORT || 3001;
 
 const TOPICS = {
