@@ -92,59 +92,79 @@ The AI Gateway now runs as a local Kong Gateway Enterprise DB-less node, configu
 
 ## Setup
 
-```bash
-# 1. Environment
-cp .env.example .env        # fill in OPENAI_API_KEY
+1. Environment
 
-# 2. Backend Kafka cluster (3-node KRaft) + Apicurio schema registry
-cd kafka
-docker compose up -d
-docker compose --profile init up    # creates topics + registers schemas, then exits
-cd ..
+   ```bash
+   cp .env.example .env        # fill in OPENAI_API_KEY
+   ```
 
-# 3. Provision Kong Event Gateway (Zion_Mainframe virtual cluster) via kongctl
-cd event-gateway
-mkdir -p kongctl/certs
-openssl req -new -x509 -nodes -newkey rsa:2048 \
-  -subj "/CN=event-gateway/C=US" \
-  -keyout kongctl/certs/key.crt \
-  -out    kongctl/certs/tls.crt
+2. Backend Kafka cluster (3-node KRaft) + Apicurio schema registry
 
-export KONGCTL_DEFAULT_KONNECT_PAT=<your-personal-access-token>
-kongctl apply -f kongctl/data_plane_certificate.yaml
+   ```bash
+   cd kafka
+   docker compose up -d
+   docker compose --profile init up    # creates topics + registers schemas, then exits
+   cd ..
+   ```
 
-CLUSTER_ID=$(kongctl get event-gateway event-driven-ai-patterns-gateway \
-  --output json --jq '.id' --jq-raw-output)
+3. Provision Kong Event Gateway (Zion_Mainframe virtual cluster) via kongctl
 
-cp konnect.env.example konnect.env
-# Edit konnect.env: set KONG_KONNECT_REGION, KONG_KONNECT_DOMAIN, and paste $CLUSTER_ID
-printf 'KONG_KONNECT_CLIENT_CERT="%s"\n' "$(cat kongctl/certs/tls.crt)" >> konnect.env
-printf 'KONG_KONNECT_CLIENT_KEY="%s"\n'  "$(cat kongctl/certs/key.crt)"  >> konnect.env
+   ```bash
+   cd event-gateway
+   mkdir -p kongctl/certs
+   openssl req -new -x509 -nodes -newkey rsa:2048 \
+     -subj "/CN=event-gateway/C=US" \
+     -keyout kongctl/certs/key.crt \
+     -out    kongctl/certs/tls.crt
 
-docker compose up -d          # starts the KEG data plane
-kongctl apply -f kongctl/config.yaml   # pushes backend cluster, virtual cluster, schema policy
-cd ..
+   export KONGCTL_DEFAULT_KONNECT_PAT=<your-personal-access-token>
+   kongctl apply -f kongctl/data_plane_certificate.yaml
 
-# 4. Start the AI Gateway locally (Enterprise DB-less + Redis)
-cd ai-gateway
-cp ee.env.example ee.env
-# Edit ee.env and set both:
-#   OPENAI_API_KEY=Bearer <your-openai-key>
-#   KONG_LICENSE_DATA=<your-kong-enterprise-license>
+   CLUSTER_ID=$(kongctl get event-gateway event-driven-ai-patterns-gateway \
+     --output json --jq '.id' --jq-raw-output)
 
-docker compose up -d    # starts Kong Gateway + Redis using kong-config/kong.yaml
-cd ..
+   cp konnect.env.example konnect.env
+   # Edit konnect.env: set KONG_KONNECT_REGION and KONG_KONNECT_DOMAIN.
+   sed -i '' \
+     -e "s|KONG_KONNECT_GATEWAY_CLUSTER_ID=.*|KONG_KONNECT_GATEWAY_CLUSTER_ID=${CLUSTER_ID}|" \
+     konnect.env
+   printf 'KONG_KONNECT_CLIENT_CERT="%s"\n' "$(cat kongctl/certs/tls.crt)" >> konnect.env
+   printf 'KONG_KONNECT_CLIENT_KEY="%s"\n'  "$(cat kongctl/certs/key.crt)"  >> konnect.env
 
-# 5. Install dependencies for every service
-for d in data-generator anomaly-detector-agent sentinel-agent dispatch-agent context-updater; do
-  (cd "$d" && npm install)
-done
-(cd matrix-ui && npm install && cd server && npm install)
+   docker compose up -d          # starts the KEG data plane
+   kongctl apply -f kongctl/config.yaml   # pushes backend cluster, virtual cluster, schema policy
+   cd ..
+   ```
 
-# 6. Launch the dashboard (this is your control plane for the rest of the demo)
-cd matrix-ui
-npm run dev     # starts the React UI (:3000) + Express/WS server (:3001)
-```
+4. Start the AI Gateway locally (Enterprise DB-less + Redis)
+
+   ```bash
+   cd ai-gateway
+   cp ee.env.example ee.env
+   # Edit ee.env and set both:
+   #   OPENAI_API_KEY=Bearer <your-openai-key>
+   #   KONG_LICENSE_DATA=<your-kong-enterprise-license>
+
+   docker compose up -d    # starts Kong Gateway + Redis using kong-config/kong.yaml
+   cd ..
+   ```
+
+5. Install dependencies for every service
+
+   ```bash
+   for d in data-generator anomaly-detector-agent sentinel-agent dispatch-agent context-updater; do
+     (cd "$d" && npm install)
+   done
+   (cd matrix-ui && npm install && cd server && npm install)
+   ```
+
+6. Launch the dashboard (this is your control plane for the rest of the demo)
+
+   ```bash
+   cd matrix-ui
+   export OPENAI_BASE_URL=https://localhost:8443/chat # Points to local AI gateway
+   npm run dev     # starts the React UI (:3000) + Express/WS server (:3001)
+   ```
 
 Open **http://localhost:3000**. Use the header's **Start All** button to launch the five backend services — no more terminals needed for the actual presentation.
 
